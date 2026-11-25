@@ -106,6 +106,7 @@
       "version": "2.4.1",
       "source": "https://github.com/lovell/libimagequant/archive/v2.4.1.tar.gz",
       "archive": "imagequant-2.4.1.tar.gz",
+      "vendored": true,
       "sha256": "47d2a84b7b1052975c9d50a3d4e3cacbf57b43d84a4c3131210848ead9964dfb"
     },
     {

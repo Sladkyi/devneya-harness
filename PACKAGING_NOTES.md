@@ -64,6 +64,8 @@ The full acceptance matrix in [DSH_TUI_BINARY_HANDOFF.md](DSH_TUI_BINARY_HANDOFF
 
 Include Chimney and DSH license texts plus copyright and license notices for every bundled runtime, library, font/asset and binary. Verify redistribution terms and produce the complete dependency inventory before release.
 
+The corresponding-source archive for imagequant 2.4.1 is vendored from the published v0.1.0 native source bundle. It carries the original Git archive commit `ce5fdeb1ccd9db288950faa21fd09c42c0a59bbb` and retains the recorded SHA-256. The upstream version tag now resolves to a different commit and supplies different source files.
+
 ## References
 
 - [DSH RC.2 release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2)

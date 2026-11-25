@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import urllib.request
@@ -33,12 +34,17 @@ def download(row, cache):
     if not file.exists():
         file.parent.mkdir(parents=True,exist_ok=True)
         temporary = file.with_name(file.name+'.download')
-        with urllib.request.urlopen(row['source'], timeout=45) as response, temporary.open('wb') as output:
-            while block := response.read(1024*1024):
-                output.write(block)
-        if sha(temporary) != row['sha256']:
-            raise ValueError('Corresponding source checksum mismatch: '+row['name'])
-        temporary.replace(file)
+        try:
+            if row.get('vendored') is True:
+                shutil.copyfile(ROOT/'vendor/native-sources'/row['archive'], temporary)
+            else:
+                with urllib.request.urlopen(row['source'], timeout=45) as response, temporary.open('wb') as output:
+                    shutil.copyfileobj(response, output, length=1024*1024)
+            if sha(temporary) != row['sha256']:
+                raise ValueError('Corresponding source checksum mismatch: '+row['name'])
+            temporary.replace(file)
+        finally:
+            temporary.unlink(missing_ok=True)
     if not file.is_file() or file.is_symlink() or sha(file) != row['sha256']:
         raise ValueError('Cached source checksum mismatch: '+row['name'])
     return file

@@ -10,10 +10,29 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 import release_common
+import source_bundle
 from source_bundle import entries
 
 
 class CorrespondingSources(unittest.TestCase):
+    def test_vendored_source_is_copied_only_if_its_pinned_digest_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vendor = root/'vendor/native-sources'
+            vendor.mkdir(parents=True)
+            archive = vendor/'library.tar.gz'
+            archive.write_bytes(b'original')
+            row = {'name':'library', 'archive':archive.name, 'vendored':True,
+                   'source':'https://example.test/library', 'sha256':hashlib.sha256(b'original').hexdigest()}
+            with patch.object(source_bundle,'ROOT',root), patch.object(source_bundle.urllib.request,'urlopen') as network:
+                cached = source_bundle.download(row, root/'cache')
+                self.assertEqual(cached.read_bytes(), b'original')
+                archive.write_bytes(b'changed')
+                with self.assertRaisesRegex(ValueError,'checksum mismatch'):
+                    source_bundle.download(row, root/'fresh-cache')
+                self.assertEqual(list((root/'fresh-cache').iterdir()), [])
+                network.assert_not_called()
+
     def test_archive_names_digests_and_https_are_required(self):
         row={'name':'library','archive':'library.tar.gz','source':'https://example.test/library','sha256':'a'*64}
         for mutation in [('archive','../escape.tar.gz'),('archive','crates/../escape'),('sha256','bad'),('source','http://example.test/library')]:
