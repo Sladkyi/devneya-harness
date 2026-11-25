@@ -12,4 +12,6 @@ Use `-NodePath` if the bundled `node.exe` is outside `PATH`. Start uses the curr
 
 During Connect, check the displayed code in the OpenCode browser window and confirm the workspace. The official plugin handles token refresh and applies the selected workspace's provider and tool policies. When the workspace supplies a model catalog, its models appear in the preview's selector. Go models require a Go entitlement in the selected workspace. [OpenCode Console integration](https://opencode.ai/console/integrations/deepseek-harness)
 
+On first launch, press `Esc` to close Chimney's welcome guide, then run `/model` to see the models supplied by the selected workspace.
+
 The preview pins the DSH dependencies of the activity panel because its published peer ranges predate the DSH version supported by Chimney. DSH's standalone `dsh-invariants` package is pinned at `0.2.0-rc.2` for the panel.
