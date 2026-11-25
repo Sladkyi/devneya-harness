@@ -1200,3 +1200,21 @@
  /**
   * 在售模型价目表，按 API model id 前缀匹配（最长前缀优先）。
   * 新模型上线而本表未收录时，估算返回 undefined，界面不显示金额（只显示
+--- a/@deepseek-ai/libreoffice-kit/lib/index.js
++++ b/@deepseek-ai/libreoffice-kit/lib/index.js
+@@ -1267,6 +1267,7 @@
+ //#region lib/types/font-metadata-cache.js
+ /** Resolve the platform's user-local cache, independently of font discovery. */
+ function defaultFontMetadataCacheDirectory(platform = process.platform, home = homedir(), env = process.env) {
++	if (platform === "win32" && env.DEVNEYA_MANAGED_BUILD === "1" && env.DEVNEYA_HOME) return join(env.DEVNEYA_HOME, "cache", "libreoffice-kit");
+ 	if (platform === "darwin") return posix.join(home, "Library/Caches/libreoffice-kit");
+ 	if (platform === "win32") return win32.join(env.LOCALAPPDATA ?? win32.join(home, "AppData/Local"), "libreoffice-kit/Cache");
+ 	return posix.join(env.XDG_CACHE_HOME && posix.isAbsolute(env.XDG_CACHE_HOME) ? env.XDG_CACHE_HOME : posix.join(home, ".cache"), "libreoffice-kit");
+@@ -1517,6 +1518,7 @@
+ * @returns the installed native engine, or the installed WASM engine.
+ */
+ async function resolveEngine(resolvePackage = (name) => require.resolve(`${name}/package.json`), packageExists = installedPackageExists, { platform = process.platform, arch = process.arch, report = hostReport } = {}) {
++	if (platform === "win32" && process.env.DEVNEYA_MANAGED_BUILD === "1") return readEngine(resolvePackage(`${ENGINE_PREFIX}-wasm`), "wasm", "wasm");
+ 	const details = platform === "linux" ? report() : {};
+ 	const target = platformTarget(platform, arch, () => details);
+ 	if (target !== void 0) {

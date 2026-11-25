@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Native builder: verified Node + frozen npm tree -> embedded ZIP -> Go launcher."""
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -72,13 +74,15 @@ def node_distribution(target):
     assert read([node, npm, '--version']) == CONFIG['npm']
     return node_root, node, npm, CHECKSUMS[name]
 
-def copy_materialized(source, dest, allowed):
+def copy_materialized(source, dest, allowed, omit=None):
     """Materialize internal npm .bin links, reject escaping or cyclic links."""
     allowed = allowed.resolve()
     def copy(src, dst, ancestors):
         resolved = src.resolve(strict=True)
         if not resolved.is_relative_to(allowed):
             raise ValueError(f'Staging link escapes installed tree: {src.relative_to(allowed)}')
+        if omit is not None and resolved.is_relative_to(omit):
+            return
         if resolved in ancestors:
             raise ValueError(f'Cyclic source link: {src}')
         if resolved.is_dir():
@@ -91,6 +95,37 @@ def copy_materialized(source, dest, allowed):
         else:
             raise ValueError(f'Nonregular staging file: {src}')
     copy(source, dest, set())
+
+def stage_windows_office_engine(app):
+    """Materialize the exact WASM Office engine from the cross-platform npm lock."""
+    package = '@deepseek-ai/libreoffice-kit-wasm'
+    lock = json.loads((app/'package-lock.json').read_text(encoding='utf-8'))
+    spec = lock['packages']['node_modules/'+package]
+    filename = f'libreoffice-kit-wasm-{spec["version"]}.tgz'
+    url = f'https://registry.npmjs.org/{package}/-/{filename}'
+    if spec['resolved'] != url:
+        raise ValueError('Unexpected LibreOffice WASM archive URL')
+    archive = BUILD/'downloads'/filename
+    with tempfile.TemporaryDirectory(prefix='windows-office-', dir=BUILD) as directory:
+        scratch = Path(directory)
+        downloaded = scratch/filename
+        if not archive.exists():
+            with urllib.request.urlopen(url, timeout=180) as response, downloaded.open('wb') as destination:
+                shutil.copyfileobj(response, destination)
+        source = archive if archive.exists() else downloaded
+        with source.open('rb') as stream:
+            integrity = 'sha512-'+base64.b64encode(hashlib.file_digest(stream, 'sha512').digest()).decode('ascii')
+        if integrity != spec['integrity']:
+            raise ValueError('LibreOffice WASM archive integrity mismatch')
+        if source == downloaded:
+            downloaded.replace(archive)
+        with tarfile.open(archive) as bundle:
+            bundle.extractall(scratch, filter='data')
+        unpacked = scratch/'package'
+        manifest = json.loads((unpacked/'package.json').read_text(encoding='utf-8'))
+        if (manifest['name'], manifest['version']) != (package, spec['version']):
+            raise ValueError('Unexpected LibreOffice WASM package identity')
+        copy_materialized(unpacked, app/'node_modules'/package, unpacked)
 
 def inventory(app, legal):
     components, notices = [], []
@@ -189,7 +224,12 @@ def main():
     if stage.exists():
         shutil.rmtree(stage)
     (stage / 'bin').mkdir(parents=True)
-    copy_materialized(install, stage / 'app', install)
+    native_office = install/'node_modules/@deepseek-ai/libreoffice-kit-win32-x64'
+    omit = native_office.resolve() if target == 'windows-x64' else None
+    copy_materialized(install, stage / 'app', install, omit=omit)
+    if target == 'windows-x64':
+        stage_windows_office_engine(stage/'app')
+        run([node, REPO/'scripts/verify_windows_office.mjs', stage/'app'], env={**env, 'DEVNEYA_MANAGED_BUILD':'1'})
     shutil.copyfile(REPO / 'runtime/entry.mjs', stage / 'app/entry.mjs')
     shutil.copyfile(node, stage / 'bin' / node.name)
     os.chmod(stage / 'bin' / node.name, 0o755)

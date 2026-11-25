@@ -704,6 +704,22 @@
           "after": "        return rate;\n    });"
         }
       ]
+    },
+    {
+      "package": "@deepseek-ai/libreoffice-kit",
+      "version": "0.1.5",
+      "path": "lib/index.js",
+      "sha256": "5583ce1754084cb63be913e67821282f484a14b43744f777fd10731af67e3c60",
+      "replacements": [
+        {
+          "before": "async function resolveEngine(resolvePackage = (name) => require.resolve(`${name}/package.json`), packageExists = installedPackageExists, { platform = process.platform, arch = process.arch, report = hostReport } = {}) {",
+          "after": "async function resolveEngine(resolvePackage = (name) => require.resolve(`${name}/package.json`), packageExists = installedPackageExists, { platform = process.platform, arch = process.arch, report = hostReport } = {}) {\n\tif (platform === \"win32\" && process.env.DEVNEYA_MANAGED_BUILD === \"1\") return readEngine(resolvePackage(`${ENGINE_PREFIX}-wasm`), \"wasm\", \"wasm\");"
+        },
+        {
+          "before": "function defaultFontMetadataCacheDirectory(platform = process.platform, home = homedir(), env = process.env) {",
+          "after": "function defaultFontMetadataCacheDirectory(platform = process.platform, home = homedir(), env = process.env) {\n\tif (platform === \"win32\" && env.DEVNEYA_MANAGED_BUILD === \"1\" && env.DEVNEYA_HOME) return join(env.DEVNEYA_HOME, \"cache\", \"libreoffice-kit\");"
+        }
+      ]
     }
   ]
 }

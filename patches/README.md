@@ -31,6 +31,9 @@ clean installation. The patch-set SHA-256 is part of the embedded build identity
 - I: show DeepSeek CNY estimates, tariffs and balances in RUB using the Bank of
   Russia's daily rate. Load it only when a cost or balance needs conversion.
   When the rate is unavailable, keep the original CNY amount.
+- Use the lockfile-pinned LibreOffice WASM engine in managed Windows builds.
+  Stage it in place of the Windows native engine and verify an offline Office
+  document conversion during the build.
 
 The bootstrap calls the RC.2 CLI's exported `runCli`, passing the verified
 `resolvedProfile` installation hook through its forwarded profile options, with
