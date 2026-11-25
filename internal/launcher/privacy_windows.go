@@ -11,7 +11,18 @@ func restrictDirectory(path string) error {
 	if err != nil {
 		return err
 	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + user.User.Sid.String() + ")")
+	entries := "(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + user.User.Sid.String() + ")"
+	existing, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err == nil && existing != nil {
+		// Windows can propagate a DACL write to all descendants, including
+		// every cached runtime. Skip the write only for the exact protected
+		// DACL. AI records auto-inheritance history, with the same ACEs.
+		current := existing.String()
+		if current == "D:P"+entries || current == "D:PAI"+entries {
+			return nil
+		}
+	}
+	sd, err := windows.SecurityDescriptorFromString("D:P" + entries)
 	if err != nil {
 		return err
 	}
