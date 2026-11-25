@@ -214,6 +214,7 @@ def append_github_env(binary: Path) -> None:
 
 
 def cleanup_worktree(repo: Path, worktree: Path) -> None:
+    ensure_within_repo(repo, worktree, "Baseline worktree cleanup")
     try:
         result = subprocess.run(
             ["git", "-C", str(worktree), "diff", "--quiet", "HEAD", "--"],
@@ -228,15 +229,20 @@ def cleanup_worktree(repo: Path, worktree: Path) -> None:
     # Go's module cache deliberately creates read-only directories and files.
     # Only this freshly-created, verified worktree is managed here. Do not
     # follow npm .bin links or change permissions outside its tree.
-    for directory, dirs, files in os.walk(worktree, followlinks=False):
+    scan_root = worktree
+    if os.name == "nt":
+        path = str(worktree.resolve())
+        scan_root = Path("\\\\?\\UNC\\" + path[2:] if path.startswith("\\\\") else "\\\\?\\" + path)
+    for directory, dirs, files in os.walk(scan_root, followlinks=False):
         for name in [*dirs, *files]:
             path = Path(directory)/name
             mode = path.lstat().st_mode
             if not stat.S_ISLNK(mode) and not mode & stat.S_IWUSR:
                 path.chmod(stat.S_IMODE(mode)|stat.S_IWUSR)
     try:
+        git_options = ["-c", "core.longpaths=true"] if os.name == "nt" else []
         subprocess.run(
-            ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+            ["git", "-C", str(repo), *git_options, "worktree", "remove", "--force", str(worktree)],
             check=True,
         )
     except (OSError, subprocess.CalledProcessError) as error:
