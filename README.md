@@ -24,6 +24,8 @@ cd C:\path\to\project
 .\devneya.exe
 ```
 
+On Windows, double-click `start.cmd` in the repository root. It opens a nearby `devneya.exe` if present, or the local provider preview on a machine where it is set up. On a fresh checkout using WSL, extract the matching Linux `devneya` executable next to `start.cmd` and make it executable in WSL first. The launcher also recognizes Linux builds under `dist/`.
+
 The current directory becomes the workspace. First launch does not download packages. In the published v0.1.0, use `/provider` to connect a provider and `/model` to select a model.
 
 The development build opens a provider picker on first launch. Choose **DeepSeek** and paste your API key. devneya checks the connection, saves the key locally and selects an available model. Choose **Other provider** to configure a different endpoint, or **Skip for now** to explore the TUI offline. Use `/setup` to reopen setup.
