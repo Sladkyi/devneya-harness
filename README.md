@@ -30,6 +30,8 @@ The current directory becomes the workspace. First launch does not download pack
 
 The development build opens a provider picker on first launch. Choose **DeepSeek** and paste your API key. devneya checks the connection, saves the key locally and selects an available model. Choose **Other provider** to configure a different endpoint, or **Skip for now** to explore the TUI offline. Use `/setup` to reopen setup.
 
+To connect **OpenCode Go**, choose it at first launch or in `/provider` → **Add a new provider**. Paste an OpenCode Console API key from a workspace with Go and choose a model. devneya checks Go access and loads the workspace's available chat models. You can switch between them later with `/model`. See the [OpenCode Go documentation](https://opencode.ai/docs/console/go/#where-can-i-use-it).
+
 In the development build, DeepSeek amounts in CNY are shown in RUB using the [Bank of Russia's daily rate](https://www.cbr.ru/currency_base/daily/) when available. If the rate cannot be fetched, amounts are shown in CNY.
 
 ## Upstream rebuilds

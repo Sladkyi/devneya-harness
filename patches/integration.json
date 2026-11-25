@@ -378,6 +378,30 @@
         {
           "before": "}\n/**\n * The edit branch of",
           "after": "}\n\nasync function saveProvider(host, notify, route, profile, ref, shadowed, apiKey) {\n    let wroteCredential = false;\n    let previousCredential;\n    if (!shadowed && apiKey !== undefined) {\n        // Capture any pre-existing value BEFORE overwriting: when the profile\n        // write below fails, rollback must restore it — an unconditional unset\n        // would destroy the old key of the route being overwritten.\n        previousCredential = await host.readCredential(ref);\n        await host.writeCredential(ref, apiKey);\n        wroteCredential = true;\n    }\n    try {\n        await host.writeProfile(route, profile);\n    }\n    catch (error) {\n        if (wroteCredential) {\n            try {\n                if (previousCredential !== undefined) {\n                    await host.writeCredential(ref, previousCredential);\n                }\n                else {\n                    await host.removeCredential(ref);\n                }\n                notify(t('provider-rollback-ok'));\n            }\n            catch {\n                notify(t('provider-rollback-failed'), { color: 'warning' });\n            }\n        }\n        const err = error instanceof Error ? error.message : String(error);\n        notify(t('provider-write-failed', { err }), { color: 'error', timeoutMs: 8000 });\n        return false;\n    }\n    return true;\n}\n/**\n * The edit branch of"
+        },
+        {
+          "before": "export async function askQuickSetup(ask, host) {",
+          "after": "const OPEN_CODE_GO = 'OpenCode Go';\nconst OPEN_CODE_GO_ROUTE = 'opencode-go';\nconst OPEN_CODE_GO_URL = 'https://opencode.ai/inference/go';\n\nexport async function askQuickSetup(ask, host) {"
+        },
+        {
+          "before": "                ...(canAddDeepSeek ? [{ label: 'DeepSeek' }] : []),",
+          "after": "                ...(canAddDeepSeek ? [{ label: 'DeepSeek' }] : []),\n                ...(!host.routeExists(OPEN_CODE_GO_ROUTE) ? [{ label: OPEN_CODE_GO }] : []),"
+        },
+        {
+          "before": "    const selected = setupChoice ?? await askQuickSetup(ask, host);",
+          "after": "    const selected = setupChoice ?? await askQuickSetup(ask, host);\n    if (selected === OPEN_CODE_GO)\n        return runOpenCodeGoSetup(deps);"
+        },
+        {
+          "before": "async function runAddFlow(deps) {",
+          "after": "async function runOpenCodeGoSetup({ host, ask, notify, working, switchModel }) {\n    const route = OPEN_CODE_GO_ROUTE;\n    const ref = deriveKeyRef(route);\n    const routeOccupied = () => host.routeExists(route) || host.envShadows(ref);\n    if (routeOccupied()) {\n        notify(t('provider-route-exists-warning'), { color: 'warning' });\n        return 'failed';\n    }\n    for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {\n        const answer = await ask({\n            questions: [{ ...textQuestion('apikey', t('devneya-go-key'), t('devneya-go-key-help')), secret: true }],\n        }, { redact: true });\n        const key = answerText(answer, 'apikey');\n        if (!key)\n            continue;\n\n        let models;\n        try {\n            const query = path => fetch(OPEN_CODE_GO_URL + path, {\n                headers: { Authorization: 'Bearer ' + key, Accept: 'application/json', 'User-Agent': 'devneya (+https://github.com/Devneya/tui)' },\n                redirect: 'error',\n                signal: AbortSignal.timeout(10000),\n            });\n            const usage = await query('/v1/usage');\n            if (usage.status === 401 || usage.status === 403) {\n                notify(t(usage.status === 401 ? 'devneya-go-key-invalid' : 'devneya-go-no-plan'), { color: 'warning', timeoutMs: 8000 });\n                continue;\n            }\n            if (!usage.ok)\n                throw new Error();\n            const listing = await query('/v1/models');\n            if (!listing.ok)\n                throw new Error();\n            const { data } = await listing.json();\n            models = data.filter(model => model?.type === 'chat' && typeof model.id === 'string'\n                && model.id.length > 0 && model.capabilities?.tools?.supported !== false)\n                .map(model => ({\n                    id: model.id,\n                    ...(typeof model.name === 'string' ? { name: model.name } : {}),\n                    ...(Number.isSafeInteger(model.limit?.context) && model.limit.context > 0 ? { contextWindow: model.limit.context } : {}),\n                    ...(Number.isSafeInteger(model.limit?.output) && model.limit.output > 0 ? { maxTokens: model.limit.output } : {}),\n                }));\n        } catch {\n            notify(t('devneya-go-connect-failed'), { color: 'warning', timeoutMs: 8000 });\n            continue;\n        }\n        if (models.length === 0) {\n            notify(t('devneya-go-no-models'), { color: 'warning', timeoutMs: 8000 });\n            return 'failed';\n        }\n\n        const choice = await ask({\n            questions: [optionQuestion('models', t('devneya-go-model'), models.map(model => ({\n                label: model.id, description: model.name,\n            })), { hideCustomInput: true })],\n        });\n        const model = answerSelected(choice, 'models')[0];\n        if (!models.some(entry => entry.id === model))\n            return 'cancelled';\n        if (routeOccupied()) {\n            notify(t('provider-route-exists-warning'), { color: 'warning' });\n            return 'failed';\n        }\n        const profile = {\n            displayName: OPEN_CODE_GO,\n            apiKeyEnv: ref,\n            baseURL: OPEN_CODE_GO_URL + '/openai/v1',\n            api: 'openai-completions',\n            models,\n        };\n        if (!await saveProvider(host, notify, route, profile, ref, false, key))\n            return 'failed';\n        if (!working())\n            await switchModel(route, model);\n        notify(t('provider-success', { route }), { color: 'success' });\n        return 'added';\n    }\n    return 'failed';\n}\n\nasync function runAddFlow(deps) {"
+        },
+        {
+          "before": "        { label: t('provider-opt-custom'), description: t('provider-opt-custom-desc') },",
+          "after": "        { label: t('provider-opt-custom'), description: t('provider-opt-custom-desc') },\n        ...(process.env.DEVNEYA_MANAGED_BUILD === '1' && !host.routeExists(OPEN_CODE_GO_ROUTE)\n            ? [{ label: OPEN_CODE_GO }] : []),"
+        },
+        {
+          "before": "    const pickedMode = answerSelected(modeAnswer, 'mode')[0];",
+          "after": "    const pickedMode = answerSelected(modeAnswer, 'mode')[0];\n    if (pickedMode === OPEN_CODE_GO)\n        return runOpenCodeGoSetup(deps);"
         }
       ]
     },
@@ -514,6 +538,10 @@
         {
           "before": "    'balance-currency': { zh: '{{currency}} 总额 {{total}} · 赠送 {{granted}} · 充值 {{toppedUp}}', en: '{{currency}} total {{total}} · granted {{granted}} · topped up {{toppedUp}}' },",
           "after": "    'balance-currency': { zh: '总额 {{total}} · 赠送 {{granted}} · 充值 {{toppedUp}}', en: 'Total {{total}} · granted {{granted}} · topped up {{toppedUp}}' },"
+        },
+        {
+          "before": "    'devneya-setup-title':",
+          "after": "    'devneya-go-key': { zh: '输入 OpenCode Go API key', en: 'Enter your OpenCode Go API key' },\n    'devneya-go-key-help': { zh: '使用有 Go 订阅的 OpenCode Console 工作区密钥。', en: 'Use an OpenCode Console API key from a workspace with Go.' },\n    'devneya-go-key-invalid': { zh: 'OpenCode 拒绝了 API key。', en: 'OpenCode rejected this API key.' },\n    'devneya-go-no-plan': { zh: '此密钥没有 OpenCode Go 访问权限。', en: 'This key does not have access to OpenCode Go.' },\n    'devneya-go-connect-failed': { zh: '无法验证 OpenCode Go 连接。', en: 'Could not verify the OpenCode Go connection.' },\n    'devneya-go-no-models': { zh: 'OpenCode Go 没有返回可用的聊天模型。', en: 'OpenCode Go returned no usable chat models.' },\n    'devneya-go-model': { zh: '选择 OpenCode Go 模型', en: 'Choose an OpenCode Go model' },\n    'devneya-setup-title':"
         }
       ]
     },
@@ -734,6 +762,26 @@
         {
           "before": "    if (SGR_MOUSE_RE.test(sequence) || (sequence.length === 6 && sequence.startsWith('\\x1b[M'))) {",
           "after": "    // ConPTY can encode pasted VT navigation keys as one Win32 record per character.\n    const navigationKey = /^\\x1b\\[(?:(?:1;\\d{1,2})?[ABCDHF]|[Z]|[2-6](?:;\\d{1,2})?~)$/.test(sequence);\n    if (navigationKey || SGR_MOUSE_RE.test(sequence) || (sequence.length === 6 && sequence.startsWith('\\x1b[M'))) {"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-llm-pi-ai",
+      "version": "0.2.0-rc.2",
+      "path": "lib/index.js",
+      "sha256": "d46dbc30aeb3414190000e6f8aeaaf994246b5e5c651de07639f4a7e92de37ef",
+      "replacements": [
+        {
+          "before": "import { homedir } from \"node:os\";",
+          "after": "import { homedir } from \"node:os\";\nimport { createHash, randomUUID } from \"node:crypto\";"
+        },
+        {
+          "before": "function requestHeaders(headers) {",
+          "after": "function requestHeaders(headers, baseUrl, sessionId) {\n\tif (process.env.DEVNEYA_MANAGED_BUILD === \"1\" && baseUrl?.replace(/\\/$/, \"\") === \"https://opencode.ai/inference/go/openai/v1\") {\n\t\t// OpenCode Go requires client attribution and stable conversation routing.\n\t\tconst clientSession = sessionId === void 0 ? randomUUID() : createHash(\"sha256\").update(String(sessionId)).digest(\"hex\");\n\t\tconst reserved = new Set([\"user-agent\", \"x-opencode-session\"]);\n\t\treturn {\n\t\t\t...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),\n\t\t\t\"User-Agent\": \"devneya (+https://github.com/Devneya/tui)\",\n\t\t\t\"x-opencode-session\": \"ses_\" + clientSession\n\t\t};\n\t}"
+        },
+        {
+          "before": "headers: requestHeaders(profile.headers)",
+          "after": "headers: requestHeaders(profile.headers, model.baseUrl, options.sessionId)"
         }
       ]
     }
