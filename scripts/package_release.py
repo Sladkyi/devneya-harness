@@ -18,6 +18,7 @@ timestamp=int(subprocess.check_output(['git','show','-s','--format=%ct',manifest
 out=ROOT/'dist/packages';out.mkdir(parents=True,exist_ok=True)
 name=f'devneya-v{CONFIG["version"]}-{args.target}'
 if args.target.startswith('windows'):
+    files['start.cmd']=ROOT/'start.cmd'
     dest=out/(name+'.zip')
     with zipfile.ZipFile(dest,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as archive:
         for name,file in sorted(files.items()):
