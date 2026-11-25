@@ -34,6 +34,9 @@ clean installation. The patch-set SHA-256 is part of the embedded build identity
 - Use the lockfile-pinned LibreOffice WASM engine in managed Windows builds.
   Stage it in place of the Windows native engine and verify an offline Office
   document conversion during the build.
+- Decode standard navigation sequences that ConPTY delivers as individual
+  Win32 input records. In the managed Windows UI, repaint once after an
+  interaction or model turn ends so the next prompt has a clean viewport.
 
 The bootstrap calls the RC.2 CLI's exported `runCli`, passing the verified
 `resolvedProfile` installation hook through its forwarded profile options, with
