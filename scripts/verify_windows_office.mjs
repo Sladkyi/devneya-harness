@@ -31,7 +31,7 @@ try {
     const inputPath = join(scratch, 'sample.odt');
     const outputPath = join(scratch, 'sample.pdf');
     await writeFile(inputPath, odt);
-    const converter = await createConverter({ fontMetadataCacheDirectory: false, fontDirectories: [] });
+    const converter = await createConverter({ fontMetadataCacheDirectory: false });
     try {
         const result = await converter.render({ inputPath, outputPath });
         assert.equal(result.backend, 'wasm');
