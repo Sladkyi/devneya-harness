@@ -133,7 +133,7 @@ jobs:
       - id: test_dependencies
         run: npm --prefix tests ci --strict-peer-deps --strict-allow-scripts --no-audit --no-fund
       - id: acceptance
-        run: node tests/acceptance.mjs --target windows-x64 --directory dist/windows-x64
+        run: node scripts/run_windows_acceptance.mjs --target windows-x64 --directory dist/windows-x64
       - id: package
         run: python scripts/package_release.py --target windows-x64
       - id: upload
