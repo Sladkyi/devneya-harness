@@ -618,7 +618,29 @@
  import { LoadedContextPanel } from '../components/LoadedContextPanel.js';
  import { formatCostReport, StatusLine } from './StatusLine.js';
  import { channelContextOccupancy } from './StatusMetrics.js';
-@@ -499,8 +499,11 @@
+@@ -336,6 +336,21 @@
+     // approvalStore share one inert instance that never holds an ask.
+     const approvals = approvalStore ?? (fallbackApprovalStore ??= new PermissionStore());
+     const approvalSnapshot = React.useSyncExternalStore(listener => approvals.subscribe(listener), () => approvals.getSnapshot());
++    const windowsConsole = process.platform === 'win32' && process.env.DEVNEYA_MANAGED_BUILD === '1';
++    const interactionOpen = questionSnapshot !== null || approvalSnapshot !== null;
++    const turnInProgress = channel.working === true;
++    const previousConsoleState = React.useRef({ interactionOpen, turnInProgress });
++    React.useEffect(() => {
++        if (!windowsConsole)
++            return;
++        const previous = previousConsoleState.current;
++        previousConsoleState.current = { interactionOpen, turnInProgress };
++        if ((previous.interactionOpen && !interactionOpen) || (previous.turnInProgress && !turnInProgress)) {
++            // Windows ConPTY can keep partial rows across an interaction or turn
++            // transition. Re-anchor once the changed layout has been committed.
++            setImmediate(() => instances.get(process.stdout)?.forceRedraw());
++        }
++    }, [windowsConsole, interactionOpen, turnInProgress]);
+     // The pending managed plugin dialog (tuiDialogs seam): a plugin's
+     // select/confirm/input request parks here until the panel settles it.
+     // Priority sits right below the approval panel (a gated tool outranks a
+@@ -499,8 +514,11 @@
      // A channel still starting its session (in-process DSH kernel) holds the two
      // DSH boot screens (home, guide) until `ready`; the effect after
      // `settingsOpen` opens them then.
@@ -631,7 +653,7 @@
          : undefined);
      const [supervisorOpen, setSupervisorOpen] = React.useState(openHomeOnBoot === true && launchpadOnBoot !== true && !recoveryRemountOnBoot && channel.ready !== false);
      /**
-@@ -730,13 +733,13 @@
+@@ -730,13 +748,13 @@
       * The first-run guide. Renders above the launchpad (see the prop docs): a
       * launch that needs setup has not answered the launchpad's question yet.
       */
@@ -647,7 +669,7 @@
      /**
       * 品牌档（`branding.ts`）：设置项 `dsh-tui.brand`（`auto` = 跟后端）与当前
       * 后端 id（`backendCapabilities.backendId`，boot 时即定）的合成。开屏词、
-@@ -812,6 +815,23 @@
+@@ -812,6 +830,21 @@
          if (held.home)
              setSupervisorOpen(true);
      }, [channelReady, channelStartupFailed, settingsOpen, treeOpen]);
@@ -663,15 +685,13 @@
 +            }, host).catch(() => {
 +                setupQuestionRef.current = undefined;
 +                markOnboardingDone();
-+                if (process.platform === 'win32')
-+                    setImmediate(() => instances.get(process.stdout)?.forceRedraw());
 +            });
 +        }
 +    }, [channelReady, channelStartupFailed]);
      /** 99h / 999 次的"求 star"开屏弹窗（`usageStats` 记账，一档只弹一次）：
       * 只在启动时判定一次——回合进行中、或已有整屏界面在开（如开机首页），
       * 这一轮不弹也**不记账**，留给下一次启动。`starPrompt` 是测试缝：传
-@@ -2383,6 +2403,40 @@
+@@ -2383,6 +2416,40 @@
          if (draft.trim() !== '')
              controller.append(draft);
      });
@@ -712,7 +732,7 @@
      /**
       * The screen's command dispatcher. Every entry point reaches this one
       * closure — PromptInput's `onRunCommand`, the completion menu, this screen's
-@@ -2809,42 +2863,9 @@
+@@ -2809,42 +2876,9 @@
                  });
                  return true;
              }
@@ -757,7 +777,7 @@
              case 'thinking':
                  setHelpOpen(false);
                  dispatchOverlay({
-@@ -3064,9 +3085,15 @@
+@@ -3064,9 +3098,15 @@
                  // oxlint-disable-next-line typescript/no-unnecessary-condition -- partial embedder channels omit the report
                  const report = channel.costReport;
                  if (report !== undefined) {
@@ -775,7 +795,7 @@
                      return true;
                  }
                  // 金额与拆解：主会话按模型分桶 + 子代理按各自 (provider, model) 分桶；
-@@ -3081,18 +3108,21 @@
+@@ -3081,18 +3121,21 @@
                  // 金额行与末尾口径共用同一判定：有已计价金额才显示金额行与"估算非账单"
                  // 文案；无金额（无用量 / 全部未计价）只解释 token（#1089）。
                  const hasAmount = estimate !== undefined && estimate.total > 0;
@@ -805,7 +825,7 @@
                  return true;
              }
              case 'balance': {
-@@ -3147,6 +3177,10 @@
+@@ -3147,6 +3190,10 @@
                  return true;
              }
              case 'setup': {
@@ -816,7 +836,7 @@
                  // `/setup` re-runs the first-run guide. Unlike the boot path this is
                  // an EXPLICIT request, so it opens unconditionally — a user who typed
                  // it has already decided the wizard is what they want. It reuses the
-@@ -5313,7 +5347,14 @@
+@@ -5313,7 +5360,14 @@
      const questionPanelNode = questionSnapshot !== null ? (_jsx(AskUserQuestionPanel, { question: questionSnapshot.question, position: questionSnapshot.position, total: questionSnapshot.total, answered: questionSnapshot.answered, initialDraft: questionSnapshot.draft, onAnswer: selection => {
              if (!questionStore.stillCurrent(questionSnapshot.key))
                  return;
