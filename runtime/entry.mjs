@@ -60,11 +60,12 @@ try {
     }
   }
   if (process.argv[2] === '--devneya-doctor') {
+    const { dependencies } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
     const resolution = await createRuntimeResolution({ profile, installAnchor: fileURLToPath(new URL('./package.json', import.meta.url)), home: process.env.DSH_HOME });
-    const checks = [{ name: 'profile', ok: true }, { name: 'application-resolution', ok: resolution.entries.some(item => item.name === '@deepseek-harness-tui/dsh-tui' && item.version === '0.15.0') }];
-    for (const [name, expected] of [['@deepseek-ai/dsh', '0.2.0-rc.2'], ['@deepseek-harness-tui/dsh-tui', '0.15.0']]) {
+    const checks = [{ name: 'profile', ok: true }, { name: 'application-resolution', ok: resolution.entries.some(item => item.name === '@deepseek-harness-tui/dsh-tui' && item.version === dependencies[item.name]) }];
+    for (const name of ['@deepseek-ai/dsh', '@deepseek-harness-tui/dsh-tui']) {
       const manifest = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve(name + '/package.json')), 'utf8'));
-      checks.push({ name, ok: manifest.version === expected });
+      checks.push({ name, ok: manifest.version === dependencies[name] });
     }
     const { createRequire } = await import('node:module');
     const req = createRequire(import.meta.url);

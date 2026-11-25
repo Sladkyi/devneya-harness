@@ -352,6 +352,358 @@
           "after": "(process.env.DEVNEYA_MANAGED_BUILD === '1' ? '使用 devneya doctor 诊断；devneya repair 仅重建运行环境。' : 'dsh 异常退出会提示进入 dsh-tui safe：只读诊断 + 干净救援 profile')"
         }
       ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/dsh-adapter/providerWizard.js",
+      "sha256": "68cb4ca826875f0db3400a607e37ab3a9a111dc29ae69957b6504619d0303300",
+      "replacements": [
+        {
+          "before": "export async function runProviderWizard(deps) {",
+          "after": "export async function runProviderWizard(deps, { quickSetup = false, setupChoice } = {}) {"
+        },
+        {
+          "before": "    let action = 'add';\n    try {\n",
+          "after": "    let action = 'add';\n    try {\n        if (quickSetup)\n            return await runQuickSetup(deps, setupChoice);\n"
+        },
+        {
+          "before": "async function runAddFlow(deps) {",
+          "after": "export async function askQuickSetup(ask, host) {\n    const route = 'deepseek';\n    const ref = deriveKeyRef(route);\n    const canAddDeepSeek = !host.routeExists(route) && !host.envShadows(ref);\n    const other = t('devneya-setup-other');\n    const skip = t('devneya-setup-skip');\n    const answer = await ask({\n        questions: [optionQuestion('setup', t('devneya-setup-title'), [\n                ...(canAddDeepSeek ? [{ label: 'DeepSeek' }] : []),\n                { label: other },\n                { label: skip },\n            ], { hideCustomInput: true })],\n    });\n    return answerSelected(answer, 'setup')[0];\n}\n\nasync function runQuickSetup(deps, setupChoice) {\n    const { host, ask, notify } = deps;\n    const route = 'deepseek';\n    const ref = deriveKeyRef(route);\n    const selected = setupChoice ?? await askQuickSetup(ask, host);\n    if (selected === t('devneya-setup-other'))\n        return runAddFlow(deps);\n    if (selected !== 'DeepSeek')\n        return 'cancelled';\n\n    const baseURL = 'https://api.deepseek.com';\n    const api = 'openai-completions';\n    for (let attempt = 0; attempt < MAX_RETRY; attempt += 1) {\n        const keyAnswer = await ask({\n            questions: [{ ...textQuestion('apikey', t('devneya-setup-key'), t('devneya-setup-key-help')), secret: true }],\n        }, { redact: true });\n        const apiKey = answerText(keyAnswer, 'apikey');\n        if (apiKey === '')\n            continue;\n        notify(t('devneya-setup-checking'));\n        const rows = await host.discoverModels({\n            baseURL, api, apiKey, signal: AbortSignal.timeout(10000),\n        }).catch(() => []);\n        const model = ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-v4-pro', 'deepseek-reasoner']\n            .find(id => rows.some(row => row.id === id));\n        if (model === undefined) {\n            notify(t('devneya-setup-check-failed'), { color: 'warning', timeoutMs: 8000 });\n            continue;\n        }\n        if (host.routeExists(route) || host.envShadows(ref)) {\n            notify(t('provider-route-exists-warning'), { color: 'warning' });\n            return 'failed';\n        }\n        if (!await saveProvider(host, notify, route, { apiKeyEnv: ref, baseURL, api, models: [{ id: model }] }, ref, false, apiKey))\n            return 'failed';\n        if (!deps.working())\n            await deps.switchModel(route, model);\n        notify(t('provider-success', { route }), { color: 'success' });\n        return 'added';\n    }\n    return 'failed';\n}\n\nasync function runAddFlow(deps) {"
+        },
+        {
+          "before": "    // ── 8. persist: credential first (rollbackable), then the profile ──\n    let wroteCredential = false;\n    let previousCredential;\n    if (!shadowed && apiKey !== undefined) {\n        // Capture any pre-existing value BEFORE overwriting: when the profile\n        // write below fails, rollback must restore it — an unconditional unset\n        // would destroy the old key of the route being overwritten.\n        previousCredential = await host.readCredential(ref);\n        await host.writeCredential(ref, apiKey);\n        wroteCredential = true;\n    }\n    const profile = buildProfile({\n        isCatalog,\n        ref,\n        baseURL,\n        api,\n        models,\n        discoveredById,\n        catalogIds: discovery.catalogIds,\n        catalogDiscovery: discovery.catalog,\n        capabilityEntries: capabilities.entries,\n    });\n    try {\n        await host.writeProfile(route, profile);\n    }\n    catch (error) {\n        if (wroteCredential) {\n            try {\n                if (previousCredential !== undefined) {\n                    await host.writeCredential(ref, previousCredential);\n                }\n                else {\n                    await host.removeCredential(ref);\n                }\n                notify(t('provider-rollback-ok'));\n            }\n            catch {\n                notify(t('provider-rollback-failed'), { color: 'warning' });\n            }\n        }\n        const err = error instanceof Error ? error.message : String(error);\n        notify(t('provider-write-failed', { err }), { color: 'error', timeoutMs: 8000 });\n        return 'failed';\n    }\n",
+          "after": "    const profile = buildProfile({\n        isCatalog,\n        ref,\n        baseURL,\n        api,\n        models,\n        discoveredById,\n        catalogIds: discovery.catalogIds,\n        catalogDiscovery: discovery.catalog,\n        capabilityEntries: capabilities.entries,\n    });\n    if (!await saveProvider(host, notify, route, profile, ref, shadowed, apiKey))\n        return 'failed';\n"
+        },
+        {
+          "before": "}\n/**\n * The edit branch of",
+          "after": "}\n\nasync function saveProvider(host, notify, route, profile, ref, shadowed, apiKey) {\n    let wroteCredential = false;\n    let previousCredential;\n    if (!shadowed && apiKey !== undefined) {\n        // Capture any pre-existing value BEFORE overwriting: when the profile\n        // write below fails, rollback must restore it — an unconditional unset\n        // would destroy the old key of the route being overwritten.\n        previousCredential = await host.readCredential(ref);\n        await host.writeCredential(ref, apiKey);\n        wroteCredential = true;\n    }\n    try {\n        await host.writeProfile(route, profile);\n    }\n    catch (error) {\n        if (wroteCredential) {\n            try {\n                if (previousCredential !== undefined) {\n                    await host.writeCredential(ref, previousCredential);\n                }\n                else {\n                    await host.removeCredential(ref);\n                }\n                notify(t('provider-rollback-ok'));\n            }\n            catch {\n                notify(t('provider-rollback-failed'), { color: 'warning' });\n            }\n        }\n        const err = error instanceof Error ? error.message : String(error);\n        notify(t('provider-write-failed', { err }), { color: 'error', timeoutMs: 8000 });\n        return false;\n    }\n    return true;\n}\n/**\n * The edit branch of"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/screens/Chat.js",
+      "sha256": "8aa6a3c08cba215efa43515444498ccd66956e3ebffbd6319efc52b4f41a2387",
+      "replacements": [
+        {
+          "before": "import { runOAuthLogin, runProviderWizard }",
+          "after": "import { askQuickSetup, runOAuthLogin, runProviderWizard }"
+        },
+        {
+          "before": "    const heldBootScreensRef = React.useRef(",
+          "after": "    const managedSetup = process.env.DEVNEYA_MANAGED_BUILD === '1';\n    const setupOnBootRef = React.useRef(managedSetup && onboardingOnBoot === true && !recoveryRemountOnBoot);\n    const setupQuestionRef = React.useRef(undefined);\n    const heldBootScreensRef = React.useRef("
+        },
+        {
+          "before": "onboarding: onboardingOnBoot === true }",
+          "after": "onboarding: !managedSetup && onboardingOnBoot === true }"
+        },
+        {
+          "before": "React.useState(onboardingOnBoot === true && !recoveryRemountOnBoot && channel.ready",
+          "after": "React.useState(!managedSetup && onboardingOnBoot === true && !recoveryRemountOnBoot && channel.ready"
+        },
+        {
+          "before": "    const [onboardingPending, setOnboardingPending] = React.useState(onboardingOnBoot === true && !recoveryRemountOnBoot);",
+          "after": "    const [onboardingPending, setOnboardingPending] = React.useState(!managedSetup && onboardingOnBoot === true && !recoveryRemountOnBoot);"
+        },
+        {
+          "before": "    }, [channelReady, channelStartupFailed, settingsOpen, treeOpen]);",
+          "after": "    }, [channelReady, channelStartupFailed, settingsOpen, treeOpen]);\n    React.useEffect(() => {\n        if (!setupOnBootRef.current || channelReady === false || channelStartupFailed)\n            return;\n        setupOnBootRef.current = false;\n        const host = channel.providerSetup();\n        if (host && host.listConfiguredProviders().length === 0 && !host.envShadows('DEEPSEEK_API_KEY')) {\n            void askQuickSetup(request => {\n                setupQuestionRef.current = request.questions[0];\n                return questionStore.ask(request);\n            }, host).catch(() => {\n                setupQuestionRef.current = undefined;\n                markOnboardingDone();\n            });\n        }\n    }, [channelReady, channelStartupFailed]);"
+        },
+        {
+          "before": "    /**\n     * The screen's command dispatcher. Every entry point reaches this one\n     * closure — PromptInput's `onRunCommand`, the completion menu, this screen's\n     * own `/` cases, and the launchpad handoff above. There is deliberately no\n     * second dispatcher for the landing page.\n     */\n",
+          "after": "    const openProviderSetup = (quickSetup = false, setupChoice) => {\n        setHelpOpen(false);\n        const host = channel.providerSetup();\n        if (!host) {\n            channel.notify(t('provider-unavailable'), { color: 'warning', timeoutMs: 8000 });\n            return;\n        }\n        void runProviderWizard({\n            host,\n            ask: (request, options) => questionStore.ask(request, options),\n            notify: (text, options) => channel.notify(text, options),\n            pushLocal: (title, lines) => channel.pushLocal(title, lines),\n            working: () => channel.working,\n            switchModel: (provider, model) => switchModelRecorded(provider, model),\n        }, { quickSetup, setupChoice }).then((outcome) => {\n            if (quickSetup && (outcome === 'added' || outcome === 'cancelled'))\n                markOnboardingDone();\n            // A catalog-changing outcome invalidates every cached model surface\n            // so `/model` (picker + completion) reflects it immediately — the\n            // same consistency the picker's per-open refetch provides, minus\n            // the stale flash on the next open. The wizard's live-switch branch\n            // already dropped the completion cache via switchModelRecorded;\n            // this covers keep-current, add, edit, delete and OAuth login/logout.\n            if (outcome === 'added' || outcome === 'updated'\n                || outcome === 'deleted' || outcome === 'signed-out') {\n                channel.invalidateModelCompletion();\n                void channel.listModels().then(setModels);\n                void channel.listProviders().then(setProviderInfos).catch(() => setProviderInfos([]));\n            }\n        }).catch(() => {\n            // The wizard notifies on every handled failure; this only swallows\n            // an unexpected reject so it never surfaces as an unhandled promise.\n        });\n    };\n    /**\n     * The screen's command dispatcher. Every entry point reaches this one\n     * closure — PromptInput's `onRunCommand`, the completion menu, this screen's\n     * own `/` cases, and the launchpad handoff above. There is deliberately no\n     * second dispatcher for the landing page.\n     */\n"
+        },
+        {
+          "before": "            case 'provider': {\n                // Interactive add-provider wizard (/provider): drives the shared\n                // question panel, persists profile + key via the channel's settings/\n                // credentials seams. No picker state — AskUserQuestionPanel renders it.\n                setHelpOpen(false);\n                const host = channel.providerSetup();\n                if (!host) {\n                    channel.notify(t('provider-unavailable'), { color: 'warning', timeoutMs: 8000 });\n                    return true;\n                }\n                void runProviderWizard({\n                    host,\n                    ask: (request, options) => questionStore.ask(request, options),\n                    notify: (text, options) => channel.notify(text, options),\n                    pushLocal: (title, lines) => channel.pushLocal(title, lines),\n                    working: () => channel.working,\n                    switchModel: (provider, model) => switchModelRecorded(provider, model),\n                }).then((outcome) => {\n                    // A catalog-changing outcome invalidates every cached model surface\n                    // so `/model` (picker + completion) reflects it immediately — the\n                    // same consistency the picker's per-open refetch provides, minus\n                    // the stale flash on the next open. The wizard's live-switch branch\n                    // already dropped the completion cache via switchModelRecorded;\n                    // this covers keep-current, add, edit, delete and OAuth login/logout.\n                    if (outcome === 'added' || outcome === 'updated'\n                        || outcome === 'deleted' || outcome === 'signed-out') {\n                        channel.invalidateModelCompletion();\n                        void channel.listModels().then(setModels);\n                        void channel.listProviders().then(setProviderInfos).catch(() => setProviderInfos([]));\n                    }\n                }).catch(() => {\n                    // The wizard notifies on every handled failure; this only swallows\n                    // an unexpected reject so it never surfaces as an unhandled promise.\n                });\n                return true;\n            }\n",
+          "after": "            case 'provider':\n                openProviderSetup();\n                return true;\n"
+        },
+        {
+          "before": "            questionStore.answerCurrent(selection);",
+          "after": "            const firstRunSetup = setupQuestionRef.current === questionSnapshot.question;\n            questionStore.answerCurrent(selection);\n            // Start settings and credential operations from the input callback.\n            // The boot effect still runs in the plugin's activation context.\n            if (firstRunSetup) {\n                setupQuestionRef.current = undefined;\n                openProviderSetup(true, selection.selected[0] ?? t('devneya-setup-skip'));\n            }"
+        },
+        {
+          "before": "            case 'setup': {\n",
+          "after": "            case 'setup': {\n                if (managedSetup) {\n                    openProviderSetup(true);\n                    return true;\n                }\n"
+        },
+        {
+          "before": "import { estimateSessionCostSnapshotCny } from '../deepseekPricing.js';",
+          "after": "import { estimateSessionCostSnapshotCny, formatCny, loadCnyRubRate } from '../deepseekPricing.js';"
+        },
+        {
+          "before": "                    lines.push(`${formatCostReport(report)} · ${t(report.source === 'backend' ? 'cost-source-backend' : 'status-cost-note')}`);\n                    setHelpOpen(false);\n                    channel.pushLocal('/cost', lines);",
+          "after": "                    const showReport = rubPerCny => {\n                        lines.push(`${formatCostReport(report, rubPerCny)} · ${t(report.source === 'backend' ? 'cost-source-backend' : 'status-cost-note')}`);\n                        channel.pushLocal('/cost', lines);\n                    };\n                    setHelpOpen(false);\n                    if (report.currency === 'CNY')\n                        void loadCnyRubRate().then(showReport);\n                    else\n                        showReport();"
+        },
+        {
+          "before": "                if (estimate !== undefined) {\n                    if (hasAmount) {\n                        lines.push(t('cost-session-estimate', { cost: estimate.total.toFixed(2) }));\n                        lines.push(`${t('cost-split-main', { cost: estimate.main.toFixed(2) })} · ${t('cost-split-subagent', { cost: estimate.subagent.toFixed(2) })}`);\n                    }\n                    if (estimate.unpricedTokens > 0) {\n                        lines.push(t('cost-unpriced', { tokens: formatTokens(estimate.unpricedTokens) }));\n                    }\n                }\n                lines.push(t(hasAmount ? 'cost-note' : 'cost-note-no-amount'));\n                setHelpOpen(false);\n                channel.pushLocal('/cost', lines);",
+          "after": "                const showEstimate = rubPerCny => {\n                    if (hasAmount) {\n                        lines.push(t('cost-session-estimate', { cost: formatCny(estimate.total, rubPerCny) }));\n                        lines.push(`${t('cost-split-main', { cost: formatCny(estimate.main, rubPerCny) })} · ${t('cost-split-subagent', { cost: formatCny(estimate.subagent, rubPerCny) })}`);\n                    }\n                    if ((estimate?.unpricedTokens ?? 0) > 0)\n                        lines.push(t('cost-unpriced', { tokens: formatTokens(estimate.unpricedTokens) }));\n                    lines.push(t(hasAmount ? 'cost-note' : 'cost-note-no-amount'));\n                    channel.pushLocal('/cost', lines);\n                };\n                setHelpOpen(false);\n                if (hasAmount)\n                    void loadCnyRubRate().then(showEstimate);\n                else\n                    showEstimate();"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/i18n.js",
+      "sha256": "f4e395fce50ac92666efdc75e0e6372987523ba2e379529c89d7c8313ba51a0a",
+      "replacements": [
+        {
+          "before": "    'provider-q-mode':",
+          "after": "    'devneya-setup-title': { zh: '选择模型提供方', en: 'Choose a provider' },\n    'devneya-setup-other': { zh: '其他提供方', en: 'Other provider' },\n    'devneya-setup-skip': { zh: '暂时跳过', en: 'Skip for now' },\n    'devneya-setup-key': { zh: '输入 DeepSeek API key', en: 'Enter your DeepSeek API key' },\n    'devneya-setup-key-help': { zh: '在 platform.deepseek.com 获取密钥', en: 'Get a key at platform.deepseek.com. It is saved on this device.' },\n    'devneya-setup-checking': { zh: '正在验证 DeepSeek 连接…', en: 'Checking the DeepSeek connection…' },\n    'devneya-setup-check-failed': { zh: '无法连接 DeepSeek。请检查密钥和网络。', en: 'Could not connect to DeepSeek. Check your API key and connection, then try again.' },\n    'provider-q-mode':"
+        },
+        {
+          "before": "    'cost-session-estimate': { zh: '本会话估算 ≈¥{{cost}}', en: 'Session estimate ≈¥{{cost}}' },",
+          "after": "    'cost-session-estimate': { zh: '本会话估算 ≈CNY {{cost}}', en: 'Session estimate ≈CNY {{cost}}' },"
+        },
+        {
+          "before": "    'cost-split-main': { zh: '主会话 ¥{{cost}}', en: 'main ¥{{cost}}' },",
+          "after": "    'cost-split-main': { zh: '主会话 CNY {{cost}}', en: 'main CNY {{cost}}' },"
+        },
+        {
+          "before": "    'cost-split-subagent': { zh: '子代理 ¥{{cost}}', en: 'subagent ¥{{cost}}' },",
+          "after": "    'cost-split-subagent': { zh: '子代理 CNY {{cost}}', en: 'subagent CNY {{cost}}' },"
+        },
+        {
+          "before": "    'balance-summary-ok': { zh: 'DeepSeek 余额 ¥{{total}} · {{state}}', en: 'DeepSeek balance ¥{{total}} · {{state}}' },",
+          "after": "    'balance-summary-ok': { zh: 'DeepSeek 余额 {{currency}} {{total}} · {{state}}', en: 'DeepSeek balance {{currency}} {{total}} · {{state}}' },"
+        },
+        {
+          "before": "    'balance-currency': { zh: '{{currency}} 总额 ¥{{total}} · 赠送 ¥{{granted}} · 充值 ¥{{toppedUp}}', en: '{{currency}} total ¥{{total}} · granted ¥{{granted}} · topped up ¥{{toppedUp}}' },",
+          "after": "    'balance-currency': { zh: '{{currency}} 总额 {{total}} · 赠送 {{granted}} · 充值 {{toppedUp}}', en: '{{currency}} total {{total}} · granted {{granted}} · topped up {{toppedUp}}' },"
+        },
+        {
+          "before": "    'balance-hover-tokens': { zh: '本会话 tokens {{input}} in → {{output}} out · ≈¥{{cost}}（{{peakName}} ¥{{peak}} / {{idleName}} ¥{{idle}}）', en: 'Session tokens {{input}} in → {{output}} out · ≈¥{{cost}} ({{peakName}} ¥{{peak}} / {{idleName}} ¥{{idle}})' },",
+          "after": "    'balance-hover-tokens': { zh: '本会话 tokens {{input}} in → {{output}} out · ≈CNY {{cost}}（{{peakName}} CNY {{peak}} / {{idleName}} CNY {{idle}}）', en: 'Session tokens {{input}} in → {{output}} out · ≈CNY {{cost}} ({{peakName}} CNY {{peak}} / {{idleName}} CNY {{idle}})' },"
+        },
+        {
+          "before": "    'balance-current-rate': { zh: '当前时段：{{name}} · 输入 ¥{{input}}/百万 · 输出 ¥{{output}}/百万', en: 'Current window: {{name}} · input ¥{{input}}/M · output ¥{{output}}/M' },",
+          "after": "    'balance-current-rate': { zh: '当前时段：{{name}} · 输入 CNY {{input}}/百万 · 输出 CNY {{output}}/百万', en: 'Current window: {{name}} · input CNY {{input}}/M · output CNY {{output}}/M' },"
+        },
+        {
+          "before": "    'provider-q-apikey-detail': { zh: '密钥将写入 ~/.dsh/.credentials.yaml（权限 0600），不会出现在会话记录中', en: 'The key is stored in ~/.dsh/.credentials.yaml (mode 0600) and never shown in the transcript' },",
+          "after": "    'provider-q-apikey-detail': { zh: '密钥将写入 本地凭证文件，不会出现在会话记录中', en: 'The key is stored in the local credential store and never shown in the transcript' },"
+        },
+        {
+          "before": "    'cost-session-estimate': { zh: '本会话估算 ≈CNY {{cost}}', en: 'Session estimate ≈CNY {{cost}}' },",
+          "after": "    'cost-session-estimate': { zh: '本会话估算 ≈{{cost}}', en: 'Session estimate ≈{{cost}}' },"
+        },
+        {
+          "before": "    'cost-split-main': { zh: '主会话 CNY {{cost}}', en: 'main CNY {{cost}}' },",
+          "after": "    'cost-split-main': { zh: '主会话 {{cost}}', en: 'main {{cost}}' },"
+        },
+        {
+          "before": "    'cost-split-subagent': { zh: '子代理 CNY {{cost}}', en: 'subagent CNY {{cost}}' },",
+          "after": "    'cost-split-subagent': { zh: '子代理 {{cost}}', en: 'subagent {{cost}}' },"
+        },
+        {
+          "before": "    'balance-hover-tokens': { zh: '本会话 tokens {{input}} in → {{output}} out · ≈CNY {{cost}}（{{peakName}} CNY {{peak}} / {{idleName}} CNY {{idle}}）', en: 'Session tokens {{input}} in → {{output}} out · ≈CNY {{cost}} ({{peakName}} CNY {{peak}} / {{idleName}} CNY {{idle}})' },",
+          "after": "    'balance-hover-tokens': { zh: '本会话 tokens {{input}} in → {{output}} out · ≈{{cost}}（{{peakName}} {{peak}} / {{idleName}} {{idle}}）', en: 'Session tokens {{input}} in → {{output}} out · ≈{{cost}} ({{peakName}} {{peak}} / {{idleName}} {{idle}})' },"
+        },
+        {
+          "before": "    'balance-current-rate': { zh: '当前时段：{{name}} · 输入 CNY {{input}}/百万 · 输出 CNY {{output}}/百万', en: 'Current window: {{name}} · input CNY {{input}}/M · output CNY {{output}}/M' },",
+          "after": "    'balance-current-rate': { zh: '当前时段：{{name}} · 输入 {{input}}/百万 · 输出 {{output}}/百万', en: 'Current window: {{name}} · input {{input}}/M · output {{output}}/M' },"
+        },
+        {
+          "before": "    'balance-summary-ok': { zh: 'DeepSeek 余额 {{currency}} {{total}} · {{state}}', en: 'DeepSeek balance {{currency}} {{total}} · {{state}}' },",
+          "after": "    'balance-summary-ok': { zh: 'DeepSeek 余额 {{total}} · {{state}}', en: 'DeepSeek balance {{total}} · {{state}}' },"
+        },
+        {
+          "before": "    'balance-currency': { zh: '{{currency}} 总额 {{total}} · 赠送 {{granted}} · 充值 {{toppedUp}}', en: '{{currency}} total {{total}} · granted {{granted}} · topped up {{toppedUp}}' },",
+          "after": "    'balance-currency': { zh: '总额 {{total}} · 赠送 {{granted}} · 充值 {{toppedUp}}', en: 'Total {{total}} · granted {{granted}} · topped up {{toppedUp}}' },"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/components/BalanceReportRow.js",
+      "sha256": "a486e521f6871d9d08d7ad6032cf90a9158ceba5831c78a3f9cc9a6ed313d0f4",
+      "replacements": [
+        {
+          "before": "            total: primary.total.toFixed(2),",
+          "after": "            currency: primary.currency,\n            total: primary.total.toFixed(2),"
+        },
+        {
+          "before": "estimateSessionCostSnapshotCny, isPeakHour, priceForModel",
+          "after": "estimateSessionCostSnapshotCny, formatCny, isPeakHour, priceForModel, useCnyRubRate"
+        },
+        {
+          "before": "    const summary = (() => {",
+          "after": "    const rubPerCny = useCnyRubRate(result?.ok === true &&\n        (result.balances.some(info => info.currency === 'CNY') || hovered));\n    const formatBalance = (amount, currency) => currency === 'CNY'\n        ? formatCny(amount, rubPerCny)\n        : currency + ' ' + amount.toFixed(2);\n    const summary = (() => {"
+        },
+        {
+          "before": "            currency: primary.currency,\n            total: primary.total.toFixed(2),",
+          "after": "            total: formatBalance(primary.total, primary.currency),"
+        },
+        {
+          "before": "            currency: info.currency,\n            total: info.total.toFixed(2),\n            granted: info.granted.toFixed(2),\n            toppedUp: info.toppedUp.toFixed(2),",
+          "after": "            total: formatBalance(info.total, info.currency),\n            granted: formatBalance(info.granted, info.currency),\n            toppedUp: formatBalance(info.toppedUp, info.currency),"
+        },
+        {
+          "before": "price.inputMiss[rateIndex].toFixed(1)",
+          "after": "formatCny(price.inputMiss[rateIndex], rubPerCny)"
+        },
+        {
+          "before": "price.output[rateIndex].toFixed(1)",
+          "after": "formatCny(price.output[rateIndex], rubPerCny)"
+        },
+        {
+          "before": "cost: estimate.total.toFixed(2)",
+          "after": "cost: formatCny(estimate.total, rubPerCny)"
+        },
+        {
+          "before": "peak: estimate.peak.toFixed(2)",
+          "after": "peak: formatCny(estimate.peak, rubPerCny)"
+        },
+        {
+          "before": "idle: estimate.idle.toFixed(2)",
+          "after": "idle: formatCny(estimate.idle, rubPerCny)"
+        },
+        {
+          "before": "cost: estimate.main.toFixed(2)",
+          "after": "cost: formatCny(estimate.main, rubPerCny)"
+        },
+        {
+          "before": "cost: estimate.subagent.toFixed(2)",
+          "after": "cost: formatCny(estimate.subagent, rubPerCny)"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/components/sidePanel/InfoPanel.js",
+      "sha256": "b53473d3a855297af80c157d1df171593f1aea9e0ec063fa8bd5d82dd8691d5b",
+      "replacements": [
+        {
+          "before": "? '¥' + estimate.total.toFixed(2)",
+          "after": "? 'CNY ' + estimate.total.toFixed(2)"
+        },
+        {
+          "before": "estimateSessionCostSnapshotCny, isDeepSeekOfficialProvider, isPeakHour",
+          "after": "estimateSessionCostSnapshotCny, formatCny, isDeepSeekOfficialProvider, isPeakHour, useCnyRubRate"
+        },
+        {
+          "before": "    const costText = costReport !== undefined",
+          "after": "    const rubPerCny = useCnyRubRate(costReport?.currency === 'CNY' || (estimate?.total ?? 0) > 0);\n    const costText = costReport !== undefined"
+        },
+        {
+          "before": "formatCostReport(costReport)",
+          "after": "formatCostReport(costReport, rubPerCny)"
+        },
+        {
+          "before": "'CNY ' + estimate.total.toFixed(2)",
+          "after": "formatCny(estimate.total, rubPerCny)"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/screens/StatusLine.js",
+      "sha256": "f8e4db016d1098457e496c92ea531dc308734066681d9bde75169b066c8300e7",
+      "replacements": [
+        {
+          "before": "dim('≈¥')",
+          "after": "dim('≈CNY ')"
+        },
+        {
+          "before": "dim('peak '), \"\\u00A5\"",
+          "after": "dim('peak '), \"CNY \""
+        },
+        {
+          "before": "dim('idle '), \"\\u00A5\"",
+          "after": "dim('off-peak '), \"CNY \""
+        },
+        {
+          "before": "estimateSessionCostSnapshotCny, isDeepSeekOfficialProvider, isPeakHour",
+          "after": "estimateSessionCostSnapshotCny, formatCny, isDeepSeekOfficialProvider, isPeakHour, useCnyRubRate"
+        },
+        {
+          "before": "export function formatCostReport(report) {\n    const digits = report.amount < 1 ? 4 : 2;",
+          "after": "export function formatCostReport(report, rubPerCny) {\n    const digits = report.amount < 1 ? 4 : 2;\n    if (report.currency === 'CNY' && rubPerCny !== undefined)\n        return formatCny(report.amount, rubPerCny, digits);"
+        },
+        {
+          "before": "    const leftFields = [",
+          "after": "    const localCost = statusBar.cost && channel.costReport === undefined && isDeepSeekOfficialProvider(channel.provider)\n        ? estimateSessionCostSnapshotCny({\n            provider: channel.provider,\n            main: channel.mainCost ?? NO_MAIN_COST,\n            subagents: channel.subagentCost ?? NO_SUBAGENT_COST,\n            fallbackTokens: channel.tokens,\n            fallbackModel: channel.model,\n        })\n        : undefined;\n    const rubPerCny = useCnyRubRate(statusBar.cost &&\n        (channel.costReport?.currency === 'CNY' || (localCost?.total ?? 0) > 0));\n    const leftFields = ["
+        },
+        {
+          "before": "formatCostReport(channel.costReport)",
+          "after": "formatCostReport(channel.costReport, rubPerCny)"
+        },
+        {
+          "before": "        ...(statusBar.cost && channel.costReport === undefined && isDeepSeekOfficialProvider(channel.provider)\n            ? (() => {\n                const estimate = estimateSessionCostSnapshotCny({\n                    provider: channel.provider,\n                    main: channel.mainCost ?? NO_MAIN_COST,\n                    subagents: channel.subagentCost ?? NO_SUBAGENT_COST,\n                    fallbackTokens: channel.tokens,\n                    fallbackModel: channel.model,\n                });\n                return estimate !== undefined && (estimate.total > 0 || estimate.unpricedTokens > 0)",
+          "after": "        ...(localCost !== undefined\n            ? (() => {\n                const estimate = localCost;\n                return estimate.total > 0 || estimate.unpricedTokens > 0"
+        },
+        {
+          "before": "\"\\u00A5\", estimate.total.toFixed(2)",
+          "after": "formatCny(estimate.total, rubPerCny)"
+        },
+        {
+          "before": "function buildHoverDetail(hover, channel, occupancy, usage, columns, barColors, backendMode, modelPicker, usedColors)",
+          "after": "function buildHoverDetail(hover, channel, occupancy, usage, columns, barColors, backendMode, modelPicker, usedColors, rubPerCny)"
+        },
+        {
+          "before": "formatCostReport(report),",
+          "after": "formatCostReport(report, rubPerCny),"
+        },
+        {
+          "before": "dim('≈CNY '), estimate.total.toFixed(2)",
+          "after": "dim('≈'), formatCny(estimate.total, rubPerCny)"
+        },
+        {
+          "before": "\"CNY \", estimate.peak.toFixed(2)",
+          "after": "formatCny(estimate.peak, rubPerCny)"
+        },
+        {
+          "before": "\"CNY \", estimate.idle.toFixed(2)",
+          "after": "formatCny(estimate.idle, rubPerCny)"
+        },
+        {
+          "before": "cost: estimate.main.toFixed(2)",
+          "after": "cost: formatCny(estimate.main, rubPerCny)"
+        },
+        {
+          "before": "cost: estimate.subagent.toFixed(2)",
+          "after": "cost: formatCny(estimate.subagent, rubPerCny)"
+        },
+        {
+          "before": "modelPicker, contextBarSegmentColors(getTheme(themeName)));",
+          "after": "modelPicker, contextBarSegmentColors(getTheme(themeName)), rubPerCny);"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/commands.js",
+      "sha256": "501c5b00d6d298c9a5ce516407a4741197ae5e98bb2863eea334fef94e698480",
+      "replacements": [
+        {
+          "before": "description: 'Re-run the first-run guide (API key / language + theme / model + workspace / shortcuts)'",
+          "after": "description: process.env.DEVNEYA_MANAGED_BUILD === '1' ? 'Connect a provider' : 'Re-run the first-run guide (API key / language + theme / model + workspace / shortcuts)'"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/deepseekPricing.js",
+      "sha256": "8d110a10dfcb59fb838825a2a0d90421c3f35defcb4df7544ddeea87714f668f",
+      "replacements": [
+        {
+          "before": "/**\n * 在售模型价目表，按 API model id 前缀匹配（最长前缀优先）。\n * 新模型上线而本表未收录时，估算返回 undefined，界面不显示金额（只显示\n * token 用量），不会给出错误数字。\n */\n",
+          "after": "import { useEffect, useState } from 'react';\n\nconst CBR_DAILY_URL = 'https://www.cbr.ru/scripts/XML_daily.asp';\nconst RATE_TTL = 6 * 60 * 60 * 1000;\nconst RETRY_INTERVAL = 5 * 60 * 1000;\nlet rate;\nlet refreshAfter = 0;\nlet inFlight;\n\n/** The feed quotes Value RUB for Nominal units of the currency. */\nexport function parseCnyRubRate(xml) {\n    for (const [, row] of xml.matchAll(/<Valute\\b[^>]*>([\\s\\S]*?)<\\/Valute>/g)) {\n        if (!/<CharCode>\\s*CNY\\s*<\\/CharCode>/.test(row))\n            continue;\n        const nominal = Number(/<Nominal>\\s*(\\d+)\\s*<\\/Nominal>/.exec(row)?.[1]);\n        const value = Number(/<Value>\\s*(\\d+(?:[,.]\\d+)?)\\s*<\\/Value>/.exec(row)?.[1]?.replace(',', '.'));\n        if (nominal > 0 && Number.isFinite(value) && value > 0)\n            return value / nominal;\n    }\n    return undefined;\n}\n\nexport function loadCnyRubRate() {\n    if (process.env.DEVNEYA_MANAGED_BUILD !== '1')\n        return Promise.resolve(undefined);\n    if (inFlight)\n        return inFlight;\n    if (Date.now() < refreshAfter)\n        return Promise.resolve(rate);\n    inFlight = (async () => {\n        try {\n            const response = await fetch(CBR_DAILY_URL, {\n                signal: AbortSignal.timeout(4000),\n                redirect: 'error',\n            });\n            if (response.ok) {\n                const xml = new TextDecoder('windows-1251').decode(await response.arrayBuffer());\n                rate = parseCnyRubRate(xml);\n            } else {\n                rate = undefined;\n            }\n        } catch {\n            rate = undefined;\n        } finally {\n            refreshAfter = Date.now() + (rate === undefined ? RETRY_INTERVAL : RATE_TTL);\n            inFlight = undefined;\n        }\n        return rate;\n    })();\n    return inFlight;\n}\n\nexport function useCnyRubRate(enabled) {\n    const [currentRate, setCurrentRate] = useState(rate);\n    useEffect(() => {\n        if (!enabled)\n            return;\n        let active = true;\n        const refresh = () => void loadCnyRubRate().then(next => {\n            if (active)\n                setCurrentRate(next);\n        });\n        refresh();\n        const timer = setInterval(refresh, RETRY_INTERVAL);\n        return () => {\n            active = false;\n            clearInterval(timer);\n        };\n    }, [enabled]);\n    return currentRate;\n}\n\nexport function formatCny(amount, rubPerCny, digits = 2) {\n    return rubPerCny === undefined\n        ? 'CNY ' + amount.toFixed(digits)\n        : '₽' + (amount * rubPerCny).toFixed(digits);\n}\n\n/**\n * 在售模型价目表，按 API model id 前缀匹配（最长前缀优先）。\n * 新模型上线而本表未收录时，估算返回 undefined，界面不显示金额（只显示\n * token 用量），不会给出错误数字。\n */\n"
+        },
+        {
+          "before": "inFlight = (async () => {",
+          "after": "inFlight = Promise.resolve().then(async () => {"
+        },
+        {
+          "before": "        return rate;\n    })();",
+          "after": "        return rate;\n    });"
+        }
+      ]
     }
   ]
 }

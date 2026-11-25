@@ -9,11 +9,11 @@ import argparse
 import json
 from pathlib import Path
 
-def normalize(file):
+def normalize(file, tui_version='0.15.0'):
     lock = json.loads(file.read_text())
     packages = lock['packages']
     prefix = 'node_modules/@deepseek-harness-tui/dsh-tui/'
-    assert packages[prefix[:-1]]['version'] == '0.15.0'
+    assert packages[prefix[:-1]]['version'] == tui_version
     changes = 0
     for path, spec in packages.items():
         if not path.startswith(prefix + 'node_modules/@dsh-std/'):

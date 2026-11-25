@@ -5,10 +5,12 @@ import hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 b=json.loads((ROOT/'build.json').read_text());p=json.loads((ROOT/'runtime/package.json').read_text());lock=json.loads((ROOT/'runtime/package-lock.json').read_text())
-assert (b['version'],b['dsh'],b['tui'],b['node'],b['npm'],b['go'],b['python'])==('0.1.0','0.2.0-rc.2','0.15.0','24.22.0','11.19.1','1.27.2','3.14.4')
+assert (b['version'],b['node'],b['npm'],b['go'],b['python'])==('0.1.0','24.22.0','11.19.1','1.27.2','3.14.4')
 assert p['dependencies']==lock['packages']['']['dependencies']
+for package,component in (('@deepseek-ai/dsh','dsh'),('@deepseek-harness-tui/dsh-tui','tui')):
+ assert p['dependencies'][package]==b[component]==lock['packages']['node_modules/'+package]['version']
 for name,spec in lock['packages'].items():
- if re.search(r'(?:^|/)node_modules/@deepseek-ai/dsh-[^/]+$',name):assert spec['version']=='0.2.0-rc.2',name
+ if re.search(r'(?:^|/)node_modules/@deepseek-ai/dsh(?:-[^/]+)?$',name):assert spec['version']==b['dsh'],name
  if name and not spec.get('inBundle'):
   assert spec.get('integrity','').startswith('sha512-'),name
   assert spec.get('resolved','').startswith('https://registry.npmjs.org/'),name

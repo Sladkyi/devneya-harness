@@ -1,7 +1,7 @@
 {
   "product": "devneya",
   "version": "0.1.0",
-  "repository": "Devneya/tui",
+  "repository": "Sladkyi/devneya-harness",
   "node": "24.22.0",
   "go": "1.27.2",
   "dsh": "0.2.0-rc.2",

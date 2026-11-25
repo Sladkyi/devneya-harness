@@ -114,13 +114,13 @@ try{
    container=process.env.DEVNEYA_CONTAINER_ENGINE||'/usr/bin/docker';
    try{
     t=new Terminal(container,['run','--rm','--name',name,'--network','none','--user','1000:1000','-it','--workdir','/tmp','-e','HOME=/tmp/test-home','-e','DEVNEYA_HOME=/tmp/devneya','-e','LANG=zh_CN.UTF-8','-v',directory+':/candidate:ro',config.linuxAcceptanceImages[target],'/candidate/devneya'],{cwd:workspace,env:process.env});
-    await t.ready(true);assert.match(t.text,/Welcome to dsh-TUI|Say something/);t.write('/provider');await delay(250);t.write('\r');await t.until(/What do you want to do/);return 'Fresh non-root Ubuntu 22.04 container reached English provider UI in its own disabled-network namespace; no Node or package manager installed';
+    await t.until(/Choose a provider/,180000);return 'Fresh non-root Ubuntu 22.04 container reached the English provider picker with networking disabled and no system Node or package manager';
    }finally{if(t)await t.close();await execute(container,['rm','--force',name]).catch(()=>{});}
   }else if(process.platform==='darwin'){
-   t=new Terminal('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny network-outbound)',binary],{cwd:workspace,env:{...env,DEVNEYA_HOME:join(base,'offline')}});try{await t.ready(true);return 'Cold first UI reached with process sandbox denying outbound networking';}finally{await t.close();}
+   t=new Terminal('/usr/bin/sandbox-exec',['-p','(version 1)(allow default)(deny network-outbound)',binary],{cwd:workspace,env:{...env,DEVNEYA_HOME:join(base,'offline')}});try{await t.until(/Choose a provider/,180000);return 'Cold first provider picker reached with process sandbox denying outbound networking';}finally{await t.close();}
   }else{
    const offline=join(base,'offline');const fw=resolve('scripts/windows_firewall.ps1');
-   try{await execute('pwsh',['-NoProfile','-File',fw,'-Mode','add','-RulePrefix',name,'-Candidate',binary,'-Node',join(offline,'runtime',metadata.buildId,'bin/node.exe')]);t=new Terminal(binary,[],{cwd:workspace,env:{...env,DEVNEYA_HOME:offline}});await t.ready(true);return 'Cold first UI reached with candidate-specific and extracted-Node firewall blocks';}
+   try{await execute('pwsh',['-NoProfile','-File',fw,'-Mode','add','-RulePrefix',name,'-Candidate',binary,'-Node',join(offline,'runtime',metadata.buildId,'bin/node.exe')]);t=new Terminal(binary,[],{cwd:workspace,env:{...env,DEVNEYA_HOME:offline}});await t.until(/Choose a provider/,180000);return 'Cold first provider picker reached with candidate-specific and extracted-Node firewall blocks';}
    finally{if(t)await t.close();await execute('pwsh',['-NoProfile','-File',fw,'-Mode','remove','-RulePrefix',name]);}
   }
  });

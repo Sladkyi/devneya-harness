@@ -26,6 +26,11 @@ clean installation. The patch-set SHA-256 is part of the embedded build identity
   or an unrelated upstream preference from overriding the English first launch.
 - F: mark the TUI and stock working-activity entry as mandatory in managed builds;
   DSH's default audit otherwise warns and leaves an unusable host running.
+- H: open the provider picker on first launch, with a short DeepSeek API-key
+  path and the existing setup for other providers.
+- I: show DeepSeek CNY estimates, tariffs and balances in RUB using the Bank of
+  Russia's daily rate. Load it only when a cost or balance needs conversion.
+  When the rate is unavailable, keep the original CNY amount.
 
 The bootstrap calls the RC.2 CLI's exported `runCli`, passing the verified
 `resolvedProfile` installation hook through its forwarded profile options, with

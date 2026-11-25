@@ -72,7 +72,8 @@ test('application manifest anchors Chimney in the native RC.2 resolution table w
  const profile=loadProfile('devneya','devneya',join(app,'package.json'),home);
  assert.equal(profile.skippedBundles.length,0);
  const resolution=await createRuntimeResolution({installAnchor:join(app,'package.json'),profile,home});
- assert(resolution.entries.some(e=>e.name==='@deepseek-harness-tui/dsh-tui'&&e.version==='0.15.0'&&e.scope==='installation'));
+ const {dependencies} = JSON.parse(readFileSync(join(app,'package.json'),'utf8'));
+ assert(resolution.entries.some(e=>e.name==='@deepseek-harness-tui/dsh-tui'&&e.version===dependencies[e.name]&&e.scope==='installation'));
  assert.equal(existsSync(join(dir,'node_modules')),false);
 });
 test('a missing mandatory TUI is a startup error, not an idle successful host',async()=>{
@@ -86,4 +87,78 @@ test('working activity follows the owned language preference rather than host lo
  process.env.LANG='zh_CN.UTF-8';process.env.LC_ALL='zh_CN.UTF-8';
  const lang=await import(pathToFileURL(join(app,'node_modules/dsh-working-activity/lib/types/lang.js')));
  assert.equal(lang.langNow(),'en');
+});
+
+test('quick setup masks the key, retries a rejected key and selects DeepSeek', async () => {
+ const {runProviderWizard} = await import(pathToFileURL(join(tui, 'lib/types/dsh-adapter/providerWizard.js')));
+ const answers = ['DeepSeek', 'fake-rejected-key', 'fake-accepted-key'];
+ const operations = [];
+ const outcome = await runProviderWizard({
+  host: {
+   routeExists: () => false,
+   envShadows: () => false,
+   discoverModels: async ({baseURL, api, apiKey, signal}) => {
+    assert.equal(baseURL, 'https://api.deepseek.com');
+    assert.equal(api, 'openai-completions');
+    assert(signal instanceof AbortSignal);
+    operations.push('check');
+    if (apiKey === 'fake-rejected-key') throw Error('rejected');
+    return [{id: 'deepseek-v4-pro'}, {id: 'deepseek-flash'}];
+   },
+   readCredential: async () => undefined,
+   writeCredential: async (ref, key) => operations.push([ref, key]),
+   writeProfile: async (route, profile) => operations.push([route, profile]),
+  },
+  ask: async ({questions: [question]}, options) => {
+   const answer = answers.shift();
+   assert(answer);
+   if (question.id === 'setup') return {answers: [{id: 'setup', selected: [answer]}]};
+   assert.equal(question.id, 'apikey');
+   assert.equal(question.secret, true);
+   assert.equal(options.redact, true);
+   return {answers: [{id: 'apikey', custom: answer}]};
+  },
+  notify: () => {},
+  working: () => false,
+  switchModel: async (route, model) => operations.push([route, model]),
+ }, {quickSetup: true});
+ assert.equal(outcome, 'added');
+ assert.deepEqual(answers, []);
+ assert.deepEqual(operations, [
+  'check', 'check', ['DEEPSEEK_API_KEY', 'fake-accepted-key'],
+  ['deepseek', {apiKeyEnv: 'DEEPSEEK_API_KEY', baseURL: 'https://api.deepseek.com', api: 'openai-completions', models: [{id: 'deepseek-flash'}]}],
+  ['deepseek', 'deepseek-flash'],
+ ]);
+});
+
+test('CNY amounts use the official rate per unit and retain their currency if offline', async () => {
+ const url = pathToFileURL(join(tui, 'lib/types/deepseekPricing.js'));
+ const originalFetch = globalThis.fetch;
+ const feed = `<ValCurs>
+    <Valute ID="other"><CharCode>USD</CharCode><Nominal>1</Nominal><Value>90,00</Value></Valute>
+    <Valute ID="yuan"><CharCode>CNY</CharCode><Nominal>10</Nominal><Value>123,45</Value></Valute>
+ </ValCurs>`;
+ let requests = 0;
+ try {
+  globalThis.fetch = async (endpoint, options) => {
+   requests += 1;
+   assert.equal(endpoint, 'https://www.cbr.ru/scripts/XML_daily.asp');
+   assert(options.signal instanceof AbortSignal);
+   return new Response(feed);
+  };
+  const {formatCny, loadCnyRubRate} = await import(url);
+  assert.equal(requests, 0);
+  const quote = await Promise.all([loadCnyRubRate(), loadCnyRubRate()]);
+  assert.deepEqual(quote, [12.345, 12.345]);
+  assert.equal(await loadCnyRubRate(), 12.345);
+  assert.equal(requests, 1);
+  assert.equal(formatCny(2, quote[0]), '₽24.69');
+
+  globalThis.fetch = async () => { throw Error('offline'); };
+  url.search = 'offline';
+  const offline = await import(url);
+  assert.equal(offline.formatCny(2, await offline.loadCnyRubRate()), 'CNY 2.00');
+ } finally {
+  globalThis.fetch = originalFetch;
+ }
 });

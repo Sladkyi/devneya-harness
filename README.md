@@ -24,7 +24,17 @@ cd C:\path\to\project
 .\devneya.exe
 ```
 
-The current directory becomes the workspace. First launch opens the TUI without downloading packages. Use `/provider` to configure an inference provider and `/model` to select a model. You can configure another provider without first entering a DeepSeek API key. Inference requires a configured provider or local model server.
+The current directory becomes the workspace. First launch does not download packages. In the published v0.1.0, use `/provider` to connect a provider and `/model` to select a model.
+
+The development build opens a provider picker on first launch. Choose **DeepSeek** and paste your API key. devneya checks the connection, saves the key locally and selects an available model. Choose **Other provider** to configure a different endpoint, or **Skip for now** to explore the TUI offline. Use `/setup` to reopen setup.
+
+In the development build, DeepSeek amounts in CNY are shown in RUB using the [Bank of Russia's daily rate](https://www.cbr.ru/currency_base/daily/) when available. If the rate cannot be fetched, amounts are shown in CNY.
+
+## Upstream rebuilds
+
+The **Upstream rebuild** workflow checks the public npm `latest` versions of DSH and Chimney every six hours once it is on the default branch. A newer version of either component starts preparation of one frozen candidate for the four supported Linux and macOS targets. The workflow can also be run manually, including against the currently pinned pair.
+
+The workflow verifies the upstream source tags and distribution patch inputs before freezing the npm lockfile. Changed patch inputs are listed in the failing job so they can be reviewed. Successful builds appear as workflow artifacts. Publishing a release still requires the standard native acceptance and release workflow.
 
 ## Commands
 

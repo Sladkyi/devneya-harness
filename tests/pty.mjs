@@ -32,7 +32,12 @@ export class Terminal {
   async enter(text) { this.write(text);await delay(180);this.write('\r');await delay(180); }
   async slash(command) { await this.enter(command);await delay(250);this.write('\r');await delay(180); }
   async ready(first=false) {
-    await this.until(/Welcome to dsh-TUI|Say something|type \/|DeepSeek Harness|workspace-write|⌸\s+❯/,first?180000:60000);
+    await this.until(/Choose a provider|Welcome to dsh-TUI|Say something|type \/|DeepSeek Harness|workspace-write|⌸\s+❯/,first?180000:60000);
+    await delay(500);
+    if (/Choose a provider/.test(this.screen.text())) {
+      this.write('\x1b');
+      await this.until(t=>!/Choose a provider/.test(t.screen.text()));
+    }
     if(/Welcome to dsh-TUI/.test(this.text)&&!/Say something/.test(this.text)) {this.write('\x1b');await this.until(/Say something|type \/|workspace-write/);}
     // The first frame precedes the final raw-input handoff during upstream
     // terminal probing. Include this settling interval in the startup budget.
