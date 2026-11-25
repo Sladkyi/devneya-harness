@@ -438,6 +438,10 @@
         {
           "before": "                if (estimate !== undefined) {\n                    if (hasAmount) {\n                        lines.push(t('cost-session-estimate', { cost: estimate.total.toFixed(2) }));\n                        lines.push(`${t('cost-split-main', { cost: estimate.main.toFixed(2) })} · ${t('cost-split-subagent', { cost: estimate.subagent.toFixed(2) })}`);\n                    }\n                    if (estimate.unpricedTokens > 0) {\n                        lines.push(t('cost-unpriced', { tokens: formatTokens(estimate.unpricedTokens) }));\n                    }\n                }\n                lines.push(t(hasAmount ? 'cost-note' : 'cost-note-no-amount'));\n                setHelpOpen(false);\n                channel.pushLocal('/cost', lines);",
           "after": "                const showEstimate = rubPerCny => {\n                    if (hasAmount) {\n                        lines.push(t('cost-session-estimate', { cost: formatCny(estimate.total, rubPerCny) }));\n                        lines.push(`${t('cost-split-main', { cost: formatCny(estimate.main, rubPerCny) })} · ${t('cost-split-subagent', { cost: formatCny(estimate.subagent, rubPerCny) })}`);\n                    }\n                    if ((estimate?.unpricedTokens ?? 0) > 0)\n                        lines.push(t('cost-unpriced', { tokens: formatTokens(estimate.unpricedTokens) }));\n                    lines.push(t(hasAmount ? 'cost-note' : 'cost-note-no-amount'));\n                    channel.pushLocal('/cost', lines);\n                };\n                setHelpOpen(false);\n                if (hasAmount)\n                    void loadCnyRubRate().then(showEstimate);\n                else\n                    showEstimate();"
+        },
+        {
+          "before": "                setupQuestionRef.current = undefined;\n                markOnboardingDone();",
+          "after": "                setupQuestionRef.current = undefined;\n                markOnboardingDone();\n                if (process.platform === 'win32')\n                    setImmediate(() => instances.get(process.stdout)?.forceRedraw());"
         }
       ]
     },
@@ -718,6 +722,18 @@
         {
           "before": "function defaultFontMetadataCacheDirectory(platform = process.platform, home = homedir(), env = process.env) {",
           "after": "function defaultFontMetadataCacheDirectory(platform = process.platform, home = homedir(), env = process.env) {\n\tif (platform === \"win32\" && env.DEVNEYA_MANAGED_BUILD === \"1\" && env.DEVNEYA_HOME) return join(env.DEVNEYA_HOME, \"cache\", \"libreoffice-kit\");"
+        }
+      ]
+    },
+    {
+      "package": "@deepseek-harness-tui/dsh-tui",
+      "version": "0.15.0",
+      "path": "lib/types/ink/parse-keypress.js",
+      "sha256": "31a4b4612943e10b90031b3b5a9a3a50cd6776ec674693ad30366363174d8146",
+      "replacements": [
+        {
+          "before": "    if (SGR_MOUSE_RE.test(sequence) || (sequence.length === 6 && sequence.startsWith('\\x1b[M'))) {",
+          "after": "    // ConPTY can encode pasted VT navigation keys as one Win32 record per character.\n    const navigationKey = /^\\x1b\\[(?:(?:1;\\d{1,2})?[ABCDHF]|[Z]|[2-6](?:;\\d{1,2})?~)$/.test(sequence);\n    if (navigationKey || SGR_MOUSE_RE.test(sequence) || (sequence.length === 6 && sequence.startsWith('\\x1b[M'))) {"
         }
       ]
     }
