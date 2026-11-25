@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, lstatSync, linkSync, unlinkSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Set managed paths before importing any DSH or TUI module. HOME remains real.
 process.env.NODE_ENV = 'production';
@@ -70,7 +70,7 @@ try {
     const { createRequire } = await import('node:module');
     const req = createRequire(import.meta.url);
     const bootRequire = createRequire(req.resolve('@deepseek-ai/dsh-app-boot'));
-    const resolver = await import(bootRequire.resolve('resolve.exports'));
+    const resolver = await import(pathToFileURL(bootRequire.resolve('resolve.exports')).href);
     checks.push({ name: 'resolve.exports/imports', ok: typeof resolver.imports === 'function' });
     await import('@deepseek-harness-tui/dsh-tui');
     for (const name of ['node-pty', 'koffi', 'sharp']) {
@@ -83,7 +83,7 @@ try {
     const applicationArgs = process.argv.slice(2);
     const entry = join(dirname(anchor), 'lib', 'bin.js');
     process.argv = [process.execPath, entry, '--profile', 'devneya', '--', ...applicationArgs];
-    const { runCli } = await import((await import('node:url')).pathToFileURL(entry).href);
+    const { runCli } = await import(pathToFileURL(entry).href);
     await runCli({ resolvedProfile: { profile, installAnchor: fileURLToPath(new URL('./package.json', import.meta.url)) } });
   }
 } catch (error) {
